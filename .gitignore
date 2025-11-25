@@ -1,3 +1,4 @@
 env/
 firebase.ts
 *.json
+.env

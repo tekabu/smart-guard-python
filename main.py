@@ -5,25 +5,30 @@ import signal
 import sys
 import time
 import json
+import os
+from dotenv import load_dotenv
 
-# Firebase configuration from firebase.ts
+# Load environment variables
+load_dotenv()
+
+# Firebase configuration from environment variables
 firebase_config = {
-    "apiKey": "AIzaSyDWOfGlXKb2XZ0gqgKDOAAFh9ZdIq9Z6RE",
-    "authDomain": "smartguard-system.firebaseapp.com",
-    "databaseURL": "https://smartguard-system-default-rtdb.asia-southeast1.firebasedatabase.app",
-    "projectId": "smartguard-system",
-    "storageBucket": "smartguard-system.firebasestorage.app",
-    "messagingSenderId": "481987146929",
-    "appId": "1:481987146929:web:212e9df1f277a7bb485e90"
+    "apiKey": os.getenv("FIREBASE_API_KEY"),
+    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+    "databaseURL": os.getenv("FIREBASE_DATABASE_URL"),
+    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
+    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
+    "appId": os.getenv("FIREBASE_APP_ID")
 }
 
-# MQTT configuration
-MQTT_SERVER = "broker.emqx.io"
-MQTT_PORT = 1883
+# MQTT configuration from environment variables
+MQTT_SERVER = os.getenv("MQTT_SERVER", "broker.emqx.io")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPICS = {
-    "card": "smartguard/verify/card",
-    "fingerprint": "smartguard/verify/fingerprint",
-    "lock_open": "smartguard/lock/open"
+    "card": os.getenv("MQTT_TOPIC_CARD", "smartguard/verify/card"),
+    "fingerprint": os.getenv("MQTT_TOPIC_FINGERPRINT", "smartguard/verify/fingerprint"),
+    "lock_open": os.getenv("MQTT_TOPIC_LOCK_OPEN", "smartguard/lock/open")
 }
 
 # Global flag for graceful shutdown
@@ -232,7 +237,8 @@ def initialize_firebase():
     """Initialize Firebase Admin SDK"""
     try:
         # Initialize Firebase Admin SDK with service account key
-        cred = credentials.Certificate("smartguard-system-firebase-adminsdk-fbsvc-aa6bccbad0.json")
+        admin_sdk_path = os.getenv("FIREBASE_ADMIN_SDK_PATH", "./adminsdk.json")
+        cred = credentials.Certificate(admin_sdk_path)
 
         firebase_admin.initialize_app(cred, {
             'databaseURL': firebase_config["databaseURL"]
