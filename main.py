@@ -105,6 +105,80 @@ def check_student_by_fingerprint(fingerprint_id):
         print(f"Error checking Firebase: {e}")
         return False, None, None
 
+def get_active_session():
+    """Get the active session firebase key"""
+    try:
+        ref = db.reference('sessions/active')
+        active_session = ref.get()
+
+        if active_session and 'firebaseKey' in active_session:
+            firebase_key = active_session['firebaseKey']
+            print(f"  - Active Session Key: {firebase_key}")
+            return firebase_key
+        else:
+            print(f"  - No active session found")
+            return None
+    except Exception as e:
+        print(f"Error getting active session: {e}")
+        return None
+
+def save_attendance(firebase_key, rfid, student_data, method):
+    """Save attendance data to Firebase"""
+    try:
+        # Check if session exists
+        session_ref = db.reference(f'sessions/{firebase_key}')
+        session_data = session_ref.get()
+
+        if not session_data:
+            print(f"  ✗ Session {firebase_key} does not exist")
+            return False
+
+        # Get session start time
+        if 'started' not in session_data:
+            print(f"  ✗ Session start time not found")
+            return False
+
+        # Parse session start time (ISO format: "2025-11-19T17:21:42.954Z")
+        from datetime import datetime
+        session_start_str = session_data['started']
+        session_start_dt = datetime.fromisoformat(session_start_str.replace('Z', '+00:00'))
+        session_start_ms = int(session_start_dt.timestamp() * 1000)
+
+        # Get current time in milliseconds
+        current_time_ms = int(time.time() * 1000)
+
+        # Calculate time elapsed since session started (in milliseconds)
+        time_in = str(current_time_ms - session_start_ms)
+
+        # Prepare attendance data
+        attendance_data = {
+            "method": method,
+            "name": student_data.get('name', 'Unknown'),
+            "studentId": student_data.get('student_id', 'Unknown'),
+            "timeIn": time_in
+        }
+
+        # Save to Firebase
+        attendance_ref = db.reference(f'sessions/{firebase_key}/attendance/{rfid}')
+        attendance_ref.set(attendance_data)
+
+        # Convert milliseconds to minutes and seconds for display
+        time_in_seconds = int(time_in) / 1000
+        minutes = int(time_in_seconds // 60)
+        seconds = int(time_in_seconds % 60)
+
+        print(f"\n✓ Attendance Saved to Firebase!")
+        print(f"  - Session: {firebase_key}")
+        print(f"  - Student: {attendance_data['name']}")
+        print(f"  - Student ID: {attendance_data['studentId']}")
+        print(f"  - Method: {method}")
+        print(f"  - Time In: {time_in} ms ({minutes}m {seconds}s after session start)")
+
+        return True
+    except Exception as e:
+        print(f"✗ Error saving attendance: {e}")
+        return False
+
 def on_connect(client, userdata, flags, rc):
     """MQTT connection callback"""
     if rc == 0:
@@ -166,6 +240,16 @@ def on_message(client, userdata, msg):
                             result = client.publish(MQTT_TOPICS["lock_open"], "OK")
                             if result.rc == 0:
                                 print(f"✓ Published 'OK' to {MQTT_TOPICS['lock_open']}")
+
+                                # Get active session and save attendance
+                                print(f"\nGetting active session...")
+                                firebase_key = get_active_session()
+
+                                if firebase_key:
+                                    # Save attendance to Firebase
+                                    save_attendance(firebase_key, data['card_id'], student_data, "RFID")
+                                else:
+                                    print(f"⚠ No active session - Attendance not saved")
                             else:
                                 print(f"✗ Failed to publish unlock command")
                         else:
@@ -211,6 +295,16 @@ def on_message(client, userdata, msg):
                             result = client.publish(MQTT_TOPICS["lock_open"], "OK")
                             if result.rc == 0:
                                 print(f"✓ Published 'OK' to {MQTT_TOPICS['lock_open']}")
+
+                                # Get active session and save attendance
+                                print(f"\nGetting active session...")
+                                firebase_key = get_active_session()
+
+                                if firebase_key:
+                                    # Save attendance to Firebase
+                                    save_attendance(firebase_key, rfid, student_data, "Fingerprint")
+                                else:
+                                    print(f"⚠ No active session - Attendance not saved")
                             else:
                                 print(f"✗ Failed to publish unlock command")
                         else:
